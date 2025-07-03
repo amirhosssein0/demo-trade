@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <title>گزارش لحظه‌ای سود/ضرر فیوچرز</title>
+    <link rel="stylesheet" href="/static/exchange/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/exchange/css/style.css">
+    <style>
+        body { direction: rtl; background: #f8f9fa; }
+        .futures-table { margin: 40px auto; max-width: 900px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #eee; }
+        th, td { text-align: center; }
+        .profit { color: #28a745; font-weight: bold; }
+        .loss { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 class="text-center mt-5 mb-4">گزارش لحظه‌ای سود/ضرر معاملات فیوچرز</h2>
+        <div id="futures-errors" class="alert alert-warning" style="display:none"></div>
+        <table class="table table-bordered futures-table">
+            <thead class="thead-dark">
+                <tr>
+                    <th>نماد</th>
+                    <th>نوع معامله</th>
+                    <th>مقدار</th>
+                    <th>قیمت ورود</th>
+                    <th>قیمت فعلی</th>
+                    <th>لوریج</th>
+                    <th>سود/ضرر ($)</th>
+                    <th>درصد سود/ضرر (%)</th>
+                </tr>
+            </thead>
+            <tbody id="futures-body">
+                <tr><td colspan="8">در حال دریافت اطلاعات...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <script>
+        function getWebSocketUrl() {
+            let loc = window.location;
+            let wsStart = loc.protocol === "https:" ? "wss://" : "ws://";
+            let host = loc.host;
+            return wsStart + host + "/ws/future/chart/";
+        }
+        let ws = new WebSocket(getWebSocketUrl());
+        ws.onopen = function() {
+            ws.send("start");
+        };
+        ws.onmessage = function(event) {
+            let data = JSON.parse(event.data);
+            let futures = data.futures || [];
+            let errors = data.errors || [];
+            let tbody = document.getElementById("futures-body");
+            let errorDiv = document.getElementById("futures-errors");
+            if (errors.length > 0) {
+                errorDiv.style.display = "block";
+                errorDiv.innerHTML = errors.map(e => `<div>${e}</div>`).join("");
+            } else {
+                errorDiv.style.display = "none";
+            }
+            if (futures.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8">معامله فعالی یافت نشد.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = futures.map(row => `
+                <tr>
+                    <td>${row.pair}</td>
+                    <td>${row.type}</td>
+                    <td>${row.amount}</td>
+                    <td>${row.entryPrice}</td>
+                    <td>${row.marketPrice}</td>
+                    <td>${row.leverage}x</td>
+                    <td class="${row.pnl >= 0 ? 'profit' : 'loss'}">${row.pnl}</td>
+                    <td class="${row.pnl_percent >= 0 ? 'profit' : 'loss'}">${row.pnl_percent}</td>
+                </tr>
+            `).join("");
+        };
+        ws.onerror = function() {
+            document.getElementById("futures-body").innerHTML = '<tr><td colspan="8">خطا در ارتباط با سرور</td></tr>';
+        };
+        ws.onclose = function() {
+            document.getElementById("futures-body").innerHTML = '<tr><td colspan="8">ارتباط قطع شد</td></tr>';
+        };
+    </script>
+</body>
+</html> 

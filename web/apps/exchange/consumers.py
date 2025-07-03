@@ -69,7 +69,7 @@ class AssetConsumer(AsyncJsonWebsocketConsumer):
         
         for index, currency in enumerate([pair.split('-')[0], pair.split('-')[1]]):
             try:
-                portfo = Portfolio.objects.get(cryptoName=currency, usr=self.user)       
+                portfo = Portfolio.objects.get(cryptoName=currency, usr_id=self.user.id)       
                 equivalentAmount = portfo.get_dollar_equivalent if currency != 'USDT' else None
                 amount = portfo.amount
             except Portfolio.DoesNotExist:

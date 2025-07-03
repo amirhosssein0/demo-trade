@@ -88,12 +88,12 @@ class HistoriesConsumer(AsyncJsonWebsocketConsumer):
     def get_histories(self, page):
         if page:
             combinedObj = TradeHistory.objects.filter(
-                usr=self.user
+                usr_id=self.user.id
             ).order_by("-time")[(page-1) * 10 : page * 10]
         else:
             combinedObj = sorted(chain(
-                TradeHistory.objects.filter(usr=self.user),
-                LimitOrders.objects.filter(usr=self.user)
+                TradeHistory.objects.filter(usr_id=self.user.id),
+                LimitOrders.objects.filter(usr_id=self.user.id)
             ),key=attrgetter('time'))
 
             if len(combinedObj) > 10:

@@ -20,6 +20,7 @@ class FuturesOrders(models.Model):
     pnl = models.FloatField(default=0)
     triggerConditions = models.FloatField(blank=True, null=True)  # only used for stop-limit
     createDate = models.DateTimeField(auto_now_add=True)
+    fee = models.FloatField(default=0)
 
     class Meta:
         verbose_name_plural = "Futures Orders"

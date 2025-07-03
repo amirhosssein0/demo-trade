@@ -56,10 +56,10 @@ class LimitConsumer(AsyncJsonWebsocketConsumer):
             obj.save()
         type_ = 1 if content["type"] == "buy" else 0
         p_price = targetPrice * float(famount.split()[0]) if content["type"] == "buy" else float(famount.split()[0])
-        Portfolio.objects.filter(usr=self.user, cryptoName=pair.split("-")[type_]).update(amount=F("amount") - p_price)
+        Portfolio.objects.filter(usr_id=self.user.id, cryptoName=pair.split("-")[type_]).update(amount=F("amount") - p_price)
 
-        executed_time = LimitOrders.objects.filter(usr=self.user).last().time
-        newId = LimitOrders.objects.filter(usr=self.user).last().id
+        executed_time = LimitOrders.objects.filter(usr_id=self.user.id).last().time
+        newId = LimitOrders.objects.filter(usr_id=self.user.id).last().id
         result = {
             "0": {
                 "id": newId,
@@ -78,13 +78,13 @@ class LimitConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def cancelOrder(self, ids):
         orders = LimitOrders.objects.filter(
-            usr=self.user,
+            usr_id=self.user.id,
             pk__in=ids,
         )
         for order in orders:
             type_ = 1 if order.type == "buy" else 0
             p_price = order.pairPrice * order.amount_float if order.type == "buy" else order.amount_float
-            Portfolio.objects.filter(usr=self.user, cryptoName=order.pair.split("-")[type_]).update(
+            Portfolio.objects.filter(usr_id=self.user.id, cryptoName=order.pair.split("-")[type_]).update(
                 amount=F("amount") + p_price
             )
         orders.delete()

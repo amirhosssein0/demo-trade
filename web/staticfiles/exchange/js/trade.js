@@ -34,6 +34,16 @@ try {
 catch (e) {
     var limitSocket = new WebSocket('wss://' + window.location.host + '/ws/limit/');
 }
+try {
+    var futuresSocket = new WebSocket('ws://' + window.location.host + '/ws/future/chart/');
+} catch (e) {
+    var futuresSocket = new WebSocket('wss://' + window.location.host + '/ws/future/chart/');
+}
+try {
+    var openOrdersSocket = new WebSocket('ws://' + window.location.host + '/ws/open-orders/');
+} catch (e) {
+    var openOrdersSocket = new WebSocket('wss://' + window.location.host + '/ws/open-orders/');
+}
 
 var main_url = window.location.origin;
 var usdtValue = 0;
@@ -198,6 +208,53 @@ limitSocket.onmessage = function(e) {
     limitSocketMessage(e)
 };
 
+futuresSocket.onopen = function() {
+    futuresSocket.send("start");
+};
+
+futuresSocket.onmessage = function(event) {
+    let data = JSON.parse(event.data);
+    let futures = data.futures || [];
+    let errors = data.errors || [];
+    let openOrdersDiv = document.getElementById("open-limit-orders");
+    // حذف ردیف‌های قبلی فیوچرز (تا تکراری نشوند)
+    let oldFuturesRows = openOrdersDiv.querySelectorAll('.futures-row');
+    oldFuturesRows.forEach(row => row.remove());
+    if (futures.length === 0 && openOrdersDiv.children.length === 0) {
+        // اگر هیچ معامله‌ای نیست، یک ردیف دمو نمایش بده
+        let ul = document.createElement('ul');
+        ul.className = 'd-flex justify-content-between market-order-item ul futures-row';
+        ul.style.opacity = '0.5';
+        let time = document.createElement('li'); time.innerText = '2024/06/27 12:00';
+        let pair = document.createElement('li'); pair.innerText = 'BTCUSDT';
+        let type = document.createElement('li'); type.innerText = 'long'; type.classList.add('green');
+        let price = document.createElement('li'); price.innerText = '60000';
+        let amount = document.createElement('li'); amount.innerText = '0.01 BTC';
+        let total = document.createElement('li'); total.innerText = '60500';
+        let pnl = document.createElement('li'); pnl.innerHTML = `<span class='text-success'>+5 $ (+0.83%)</span>`;
+        ul.appendChild(time); ul.appendChild(pair); ul.appendChild(type); ul.appendChild(price); ul.appendChild(amount); ul.appendChild(total); ul.appendChild(pnl);
+        openOrdersDiv.prepend(ul);
+        return;
+    }
+    if (futures.length === 0) {
+        // اگر هیچ معامله فیوچرز باز نبود، چیزی اضافه نکن
+        return;
+    }
+    futures.forEach(row => {
+        let ul = document.createElement('ul');
+        ul.className = 'd-flex justify-content-between market-order-item ul futures-row';
+        let time = document.createElement('li'); time.innerText = '-';
+        let pair = document.createElement('li'); pair.innerText = row.pair;
+        let type = document.createElement('li'); type.innerText = row.type; type.classList.add(row.type === 'long' ? 'green' : 'red');
+        let price = document.createElement('li'); price.innerText = row.entryPrice;
+        let amount = document.createElement('li'); amount.innerText = row.amount;
+        let total = document.createElement('li'); total.innerText = row.marketPrice;
+        let pnl = document.createElement('li');
+        pnl.innerHTML = `<span class='${row.pnl >= 0 ? 'text-success' : 'text-danger'}'>${row.pnl} $ (${row.pnl_percent}%)</span>`;
+        ul.appendChild(time); ul.appendChild(pair); ul.appendChild(type); ul.appendChild(price); ul.appendChild(amount); ul.appendChild(total); ul.appendChild(pnl);
+        openOrdersDiv.prepend(ul);
+    });
+};
 
 function getPortfolio(data) {
     Object.keys(data).forEach(function(index){
@@ -353,79 +410,166 @@ function clearAllAlerts() {
 }
 
 function getHistory(data) {
-    if(Object.keys(data).length != 0){
-        document.querySelector('.no-data').classList.add("d-none")
-    }
-    Object.keys(data).forEach(function(index){
-        obj = data[index];
-    
-        var newNode = document.createElement("ul");
-        var orderType = obj["orderType"];
-        var complete = obj["complete"];
-        newNode.classList.add("d-flex", "justify-content-between", "market-order-item", "ul");
-
-        var time = document.createElement("li");
-        var pair = document.createElement("li");
-        var type = document.createElement("li");
-        var price = document.createElement("li");
-        var amount = document.createElement("li");
-        var total = document.createElement("li");
-        var cancelBtn = document.createElement("button");
-        
-        date = new Date(obj["time"] * 1000);
-        formattedDate = `${date.getFullYear()}/${date.getMonth()}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}`;
-        time.innerText = formattedDate;
-        type.innerText = obj['type'];
-        pair.innerText = obj['pair'];
-        amount.innerText = `${parseFloat(obj["amount"].split(' ')[0]).toFixed(4)} ${obj["amount"].split(' ')[1]}`;
-        total.innerText = (obj['pairPrice'] * parseFloat(obj['amount'].split(' ')[0])).toFixed(2);
-        price.innerText = obj['pairPrice'];
-        
-
-        if (obj['type'] == 'buy') {
-            type.classList.add('green')
+    if(Array.isArray(data)) {
+        if(data.length != 0){
+            document.querySelector('.no-data').classList.add("d-none")
         }
-        else {
-            type.classList.add('red')
-        }
+        data.forEach(function(obj){
+            var newNode = document.createElement("ul");
+            var orderType = obj["orderType"];
+            var complete = obj["complete"];
+            newNode.classList.add("d-flex", "justify-content-between", "market-order-item", "ul");
 
-        newNode.appendChild(time);
-        newNode.appendChild(pair);
-        newNode.appendChild(type);
-        newNode.appendChild(price);
-        newNode.appendChild(amount);
-        newNode.appendChild(total);
-
-        if(orderType == 'market'){
-            var parent = document.getElementById("market-orders");
-        }
-        else if(orderType == 'limit'){
-            if(obj["complete"] == true){
-                var parent = document.getElementById("closed-limit-orders");
+            var time = document.createElement("li");
+            var pair = document.createElement("li");
+            var type = document.createElement("li");
+            var price = document.createElement("li");
+            var amount = document.createElement("li");
+            var total = document.createElement("li");
+            var pnl = document.createElement("li");
+            var cancelBtn = document.createElement("button");
+            
+            date = new Date(obj["time"] ? obj["time"] * 1000 : Date.now());
+            formattedDate = `${date.getFullYear()}/${date.getMonth()}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}`;
+            time.innerText = formattedDate;
+            type.innerText = obj['type'];
+            pair.innerText = obj['pair'];
+            amount.innerText = `${parseFloat(obj["amount"].split(' ')[0]).toFixed(4)} ${obj["amount"].split(' ')[1]}`;
+            total.innerText = (obj['pairPrice'] * parseFloat(obj['amount'].split(' ')[0])).toFixed(2);
+            price.innerText = obj['pairPrice'];
+            // --- مقداردهی PnL ---
+            if(obj['is_futures']) {
+                pnl.innerHTML = `<span class='${obj['pnl'] >= 0 ? 'text-success' : 'text-danger'}'>${obj['pnl']} $ (${obj['pnl_percent']}%)</span>`;
+            } else {
+                pnl.innerText = '-';
             }
-            else{
-                var parent = document.getElementById("open-limit-orders");
-                cancelBtn.innerText = "cancel";
-                cancelBtn.classList.add(...['btn', 'btn-primary-outline', 'green']);
-                cancelBtn.setAttribute('data-id', obj["id"])
-                cancelBtn.onclick = function(e){
-                    limitSocket.send(JSON.stringify({"cancel":[parseInt(this.dataset.id)]}));
-                    newNode.remove()
-                    createAlert('success', 'Selected order canceled!');
-                    assetSocket.send(JSON.stringify({"currentPair": `${globPair}-USDT`}));
+
+            if (obj['type'] == 'buy') {
+                type.classList.add('green')
+            }
+            else {
+                type.classList.add('red')
+            }
+
+            newNode.appendChild(time);
+            newNode.appendChild(pair);
+            newNode.appendChild(type);
+            newNode.appendChild(price);
+            newNode.appendChild(amount);
+            newNode.appendChild(total);
+            newNode.appendChild(pnl);
+
+            if(orderType == 'market'){
+                var parent = document.getElementById("market-orders");
+            }
+            else if(orderType == 'limit' || orderType == 'futures'){
+                if(obj["complete"] == true){
+                    var parent = document.getElementById("closed-limit-orders");
                 }
-                newNode.appendChild(cancelBtn);
-                createdOpenOrders.push(newNode);
-                openorderIds.push(obj["id"])
+                else{
+                    var parent = document.getElementById("open-limit-orders");
+                    if(orderType == 'limit') {
+                        cancelBtn.innerText = "cancel";
+                        cancelBtn.classList.add(...['btn', 'btn-primary-outline', 'green']);
+                        cancelBtn.setAttribute('data-id', obj["id"])
+                        cancelBtn.onclick = function(e){
+                            limitSocket.send(JSON.stringify({"cancel":[parseInt(this.dataset.id)]}));
+                            newNode.remove()
+                            createAlert('success', 'Selected order canceled!');
+                            assetSocket.send(JSON.stringify({"currentPair": `${globPair}-USDT`}));
+                        }
+                        newNode.appendChild(cancelBtn);
+                        createdOpenOrders.push(newNode);
+                        openorderIds.push(obj["id"])
+                    }
+                }
             }
+            createdHistory.push(newNode);
+            parent.prepend(newNode);
+        })
+        if(createdOpenOrders.length != 0){
+            document.getElementById('cancel-all').classList.remove('invisible');
         }
-        createdHistory.push(newNode);
-        parent.prepend(newNode);
-    })
-    if(createdOpenOrders.length != 0){
-        document.getElementById('cancel-all').classList.remove('invisible');
+    } else {
+        // حالت قبلی برای دیکشنری (سازگاری با داده قدیمی)
+        Object.keys(data).forEach(function(index){
+            obj = data[index];
+            var newNode = document.createElement("ul");
+            var orderType = obj["orderType"];
+            var complete = obj["complete"];
+            newNode.classList.add("d-flex", "justify-content-between", "market-order-item", "ul");
+
+            var time = document.createElement("li");
+            var pair = document.createElement("li");
+            var type = document.createElement("li");
+            var price = document.createElement("li");
+            var amount = document.createElement("li");
+            var total = document.createElement("li");
+            var pnl = document.createElement("li");
+            var cancelBtn = document.createElement("button");
+            
+            date = new Date(obj["time"] ? obj["time"] * 1000 : Date.now());
+            formattedDate = `${date.getFullYear()}/${date.getMonth()}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}`;
+            time.innerText = formattedDate;
+            type.innerText = obj['type'];
+            pair.innerText = obj['pair'];
+            amount.innerText = `${parseFloat(obj["amount"].split(' ')[0]).toFixed(4)} ${obj["amount"].split(' ')[1]}`;
+            total.innerText = (obj['pairPrice'] * parseFloat(obj['amount'].split(' ')[0])).toFixed(2);
+            price.innerText = obj['pairPrice'];
+            // --- مقداردهی PnL ---
+            if(obj['is_futures']) {
+                pnl.innerHTML = `<span class='${obj['pnl'] >= 0 ? 'text-success' : 'text-danger'}'>${obj['pnl']} $ (${obj['pnl_percent']}%)</span>`;
+            } else {
+                pnl.innerText = '-';
+            }
+
+            if (obj['type'] == 'buy') {
+                type.classList.add('green')
+            }
+            else {
+                type.classList.add('red')
+            }
+
+            newNode.appendChild(time);
+            newNode.appendChild(pair);
+            newNode.appendChild(type);
+            newNode.appendChild(price);
+            newNode.appendChild(amount);
+            newNode.appendChild(total);
+            newNode.appendChild(pnl);
+
+            if(orderType == 'market'){
+                var parent = document.getElementById("market-orders");
+            }
+            else if(orderType == 'limit' || orderType == 'futures'){
+                if(obj["complete"] == true){
+                    var parent = document.getElementById("closed-limit-orders");
+                }
+                else{
+                    var parent = document.getElementById("open-limit-orders");
+                    if(orderType == 'limit') {
+                        cancelBtn.innerText = "cancel";
+                        cancelBtn.classList.add(...['btn', 'btn-primary-outline', 'green']);
+                        cancelBtn.setAttribute('data-id', obj["id"])
+                        cancelBtn.onclick = function(e){
+                            limitSocket.send(JSON.stringify({"cancel":[parseInt(this.dataset.id)]}));
+                            newNode.remove()
+                            createAlert('success', 'Selected order canceled!');
+                            assetSocket.send(JSON.stringify({"currentPair": `${globPair}-USDT`}));
+                        }
+                        newNode.appendChild(cancelBtn);
+                        createdOpenOrders.push(newNode);
+                        openorderIds.push(obj["id"])
+                    }
+                }
+            }
+            createdHistory.push(newNode);
+            parent.prepend(newNode);
+        })
+        if(createdOpenOrders.length != 0){
+            document.getElementById('cancel-all').classList.remove('invisible');
+        }
     }
-   
 }
 function cancelAllOrders(){
     limitSocket.send(JSON.stringify({"cancel": openorderIds}));
@@ -762,3 +906,109 @@ document.querySelectorAll('input').forEach( (item, index) => {
         item.value = ''
     }
 })
+
+openOrdersSocket.onopen = function(e){
+    openOrdersSocket.send(JSON.stringify({"page": 1}));
+};
+
+openOrdersSocket.onmessage = function(e){
+    let data = JSON.parse(e.data);
+    let openOrdersDiv = document.getElementById("open-limit-orders");
+    // حذف ردیف‌های قبلی
+    let oldRows = openOrdersDiv.querySelectorAll('.open-orders-row');
+    oldRows.forEach(row => row.remove());
+    if (data.length === 0) {
+        // نمایش پیام خالی بودن
+        return;
+    }
+    data.forEach(row => {
+        let ul = document.createElement('ul');
+        ul.className = 'd-flex justify-content-between market-order-item ul open-orders-row';
+        let time = document.createElement('li'); time.innerText = '-';
+        let pair = document.createElement('li'); pair.innerText = row.pair;
+        let type = document.createElement('li'); type.innerText = row.type; type.classList.add(row.type === 'long' ? 'green' : 'red');
+        let price = document.createElement('li'); price.innerText = row.pairPrice;
+        let amount = document.createElement('li'); amount.innerText = row.amount;
+        let total = document.createElement('li'); total.innerText = row.marketPrice || '-';
+        let pnl = document.createElement('li');
+        if(row.is_futures){
+            pnl.innerHTML = `<span class='${row.pnl >= 0 ? 'text-success' : 'text-danger'}'>${row.pnl} $ (${row.pnl_percent}%)</span>`;
+        } else {
+            pnl.innerText = '-';
+        }
+        ul.appendChild(time); ul.appendChild(pair); ul.appendChild(type); ul.appendChild(price); ul.appendChild(amount); ul.appendChild(total); ul.appendChild(pnl);
+        openOrdersDiv.prepend(ul);
+    });
+};
+
+window.addEventListener('load', function() {
+    var btn = document.getElementById('test-futures-order');
+    if(btn) {
+        btn.onclick = function() {
+            console.log('clicked!');
+            fetch('/future/create/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: new URLSearchParams({
+                    type: 'long',
+                    pair: 'BTCUSDT',
+                    amount: '0.01 BTC',
+                    entryPrice: 60000,
+                    marketPrice: 60000,
+                    liqPrice: 55000,
+                    leverage: 10,
+                    orderType: 'market',
+                    marginType: 'cross'
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    createAlert('success', 'سفارش فیوچرز ثبت شد!');
+                    alert('سفارش فیوچرز ثبت شد!');
+                } else {
+                    createAlert('danger', 'خطا: ' + (data.error || ''));
+                    alert('خطا: ' + (data.error || ''));
+                }
+            })
+            .catch(err => {
+                createAlert('danger', 'خطای ارتباط با سرور');
+                alert('خطای ارتباط با سرور');
+                console.error(err);
+            });
+        }
+    }
+});
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function updateFuturesFee() {
+    let amount = parseFloat(document.getElementById('uValue').value) || 0;
+    let price = parseFloat(document.getElementById('priceLoaded').textContent) || 0;
+    let leverage = 1;
+    var levInput = document.getElementById('leverage-input');
+    if (levInput) {
+        leverage = parseInt(levInput.value) || 1;
+    }
+    let fee = amount * price * leverage * 0.01;
+    document.getElementById('futures-fee').innerText = fee.toFixed(4) + ' USDT';
+}
+if(document.getElementById('uValue'))
+    document.getElementById('uValue').addEventListener('input', updateFuturesFee);
+if(document.getElementById('leverage-input'))
+    document.getElementById('leverage-input').addEventListener('input', updateFuturesFee);

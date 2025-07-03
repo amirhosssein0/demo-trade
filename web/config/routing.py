@@ -13,6 +13,7 @@ from account import routing as account_routing
 from exchange import routing as exchange_routing
 from spot import routing as spot_routing
 from limit_order import routing as limit_routing
+from future import routing as future_routing
 
 application = ProtocolTypeRouter(
     {
@@ -24,6 +25,7 @@ application = ProtocolTypeRouter(
                         + exchange_routing.websocket_urlpatterns
                         + account_routing.websocket_urlpatterns
                         + limit_routing.websocket_urlpatterns
+                        + future_routing.websocket_urlpatterns
                     )
                 )
             )

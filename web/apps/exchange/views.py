@@ -10,25 +10,24 @@ from requests.structures import CaseInsensitiveDict
 
 
 def exchange_trade(request, pair=None):
-
     if not pair:
         return redirect(reverse("exchange:exchange_trade", kwargs={"pair": "BTC-USDT"}))
 
     name = pair.split("-")[0]
     pair = search_symbol(pair)
-    context = {"pair": pair, "name": name.upper()}
-
+    
+    # If search_symbol fails, use default BTC-USDT pair
     if not pair:
         pair = "BINANCE:BTCUSDT"
         name = "BTC"
-
         context = {
             "pair": pair,
             "name": name.upper(),
         }
-        return redirect(reverse("exchange:exchange_trade", kwargs={"pair": "BTC-USDT"}))
-    else:
         return render(request, "registration/trade.html", context=context)
+    
+    context = {"pair": pair, "name": name.upper()}
+    return render(request, "registration/trade.html", context=context)
 
 
 def search_cryptos(request, value):

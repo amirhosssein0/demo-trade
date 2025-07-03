@@ -110,6 +110,7 @@
 				  </li>
 				</ul>
 				<p>Margin: <span id="usdtAmount"></span></p>
+				<p>Fee (1%): <span id="futures-fee"></span></p>
 			  </div>
 			  <div class="market-trade-sell">
 				<div class="input-group">
@@ -398,6 +399,7 @@
 			  <li>Price(USD)</li>
 			  <li>Amount</li>
 			  <li>Total(USD)</li>
+			  <li>PnL (Futures)</li>
 			  <button id="cancel-all" class="btn btn-primary-outline green invisible" onclick="cancelAllOrders()">cancel all</button>
 			</ul>
 			<span class="no-data">
@@ -407,6 +409,7 @@
 			<div id="open-limit-orders">
 			  <!-- open orders here -->
 			</div>
+			<button id="test-futures-order" class="btn btn-primary mt-3">ثبت سفارش فیوچرز تستی</button>
 		  </div>
 		  <div class="tab-pane fade" id="stop-orders" role="tabpanel">
 			<ul class="d-flex justify-content-between market-order-item">
@@ -430,5 +433,6 @@
 	</div>{% endif %}
   </div>
 </div>
+<div id="futures-pnl-box"></div>
 <div id="alert" class="alerts"></div>
 <script src="{% static 'exchange/js/search.js' %}"></script> {% endblock %}

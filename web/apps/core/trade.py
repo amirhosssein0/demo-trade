@@ -6,7 +6,7 @@ from .utils import calc_equivalent
 class Trade:
     def __init__(self, user, inputs):
         self.user = user
-        self.portfo = Portfolio.objects.filter(usr=self.user, marketType="spot")
+        self.portfo = Portfolio.objects.filter(usr_id=self.user.id, marketType="spot")
         self.orderType = inputs["orderType"]
         self.type = inputs["type"]
         self.pair = inputs["pair"]
@@ -75,7 +75,7 @@ class Trade:
                 obj.amount = obj.amount + toAdd[1]
                 obj.save()
             except:
-                obj = Portfolio(usr=self.user, cryptoName=toAdd[0], amount=toAdd[1])
+                obj = Portfolio(usr_id=self.user.id, cryptoName=toAdd[0], amount=toAdd[1])
                 obj.save()
             updatedAsset["1"] = {
                 "cryptoName": toAdd[0],
@@ -89,7 +89,7 @@ class Trade:
                 histAmount[item.cryptoName] = item.amount
 
             TradeHistory.objects.create(
-                usr=self.user,
+                usr_id=self.user.id,
                 type=self.type,
                 pair=self.pair,
                 histAmount=histAmount,
@@ -101,7 +101,7 @@ class Trade:
 
             tradeResponse = {"successful": True, "message": "Order filled!"}
 
-            executed_time = TradeHistory.objects.filter(usr=self.user).last().time
+            executed_time = TradeHistory.objects.filter(usr_id=self.user.id).last().time
             tradeResult = {
                 "0": {
                     "type": self.type,

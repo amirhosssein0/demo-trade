@@ -20,6 +20,7 @@ urlpatterns = [
     path("account/", include("account.urls")),
     path("account/", include("django.contrib.auth.urls")),
     path("", include("social_django.urls", namespace="social")),
+    path("future/", include("future.urls")),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 handler404 = "config.views.page_not_found_view"

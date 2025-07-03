@@ -7,6 +7,7 @@ from core.utils import calc_equivalent, get_crypto_compare, pretify
 from django.db.models import F, Sum
 from exchange.models import Portfolio, TradeHistory
 from limit_order.models import LimitOrders
+from future.models import FuturesOrders
 
 
 class ChartSocket(AsyncJsonWebsocketConsumer):
@@ -46,7 +47,7 @@ class ChartSocket(AsyncJsonWebsocketConsumer):
     def get_portfolio(self):
         return list(
             Portfolio.objects.all().filter(
-                usr=self.user,
+                usr_id=self.user.id,
                 marketType="spot",
             )
         )
@@ -55,7 +56,7 @@ class ChartSocket(AsyncJsonWebsocketConsumer):
     def get_trades(self):
         return list(
             TradeHistory.objects.all().filter(
-                usr=self.user,
+                usr_id=self.user.id,
                 complete=True,
             )
         )
@@ -64,7 +65,7 @@ class ChartSocket(AsyncJsonWebsocketConsumer):
     def get_orders(self):
         return list(
             LimitOrders.objects.all().filter(
-                usr=self.user,
+                usr_id=self.user.id,
                 amount__gt=0,
             )
         )
@@ -128,7 +129,7 @@ class WalletSocket(AsyncJsonWebsocketConsumer):
         return list(
             Portfolio.objects.all()
             .filter(
-                usr=self.user,
+                usr_id=self.user.id,
                 marketType="spot",
                 amount__gt=0,
             )
@@ -140,7 +141,7 @@ class WalletSocket(AsyncJsonWebsocketConsumer):
         return (
             LimitOrders.objects.all()
             .filter(
-                usr=self.user,
+                usr_id=self.user.id,
                 amount__gt=0,
             )
             .aggregate(sum=Sum("equivalentAmount"))["sum"]
@@ -149,11 +150,11 @@ class WalletSocket(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def get_symbol_form_db(self, symbol, price, total):
         sym = Portfolio.objects.get(
-            usr=self.user,
+            usr_id=self.user.id,
             marketType="spot",
             cryptoName=symbol,
         )
-        LimitOrders.objects.filter(usr=self.user, pair__startswith=symbol, type="sell").update(
+        LimitOrders.objects.filter(usr_id=self.user.id, pair__startswith=symbol, type="sell").update(
             equivalentAmount=F("amount_float") * price
         )
         sym.equivalentAmount = total
@@ -188,7 +189,7 @@ class HistoriesConsumer(AsyncJsonWebsocketConsumer):
 
         before = (page - 1) * 10
         after = page * 10
-        histObj = TradeHistory.objects.filter(usr=self.user).order_by("-id")[before:after]
+        histObj = TradeHistory.objects.filter(usr_id=self.user.id).order_by("-id")[before:after]
 
         hist_content = dict()
 
@@ -234,35 +235,69 @@ class OpenOrdersConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def initialFilling(self, page):
-
         before = (page - 1) * 10
         after = page * 10
-        orderObj = LimitOrders.objects.filter(usr=self.user).order_by("-id")[before:after]
-
-        order_content = dict()
-
-        for index, item in enumerate(orderObj):
-            order_content[str(index)] = {
+        orderObj = list(LimitOrders.objects.filter(usr_id=self.user.id).order_by("-id")[before:after])
+        futuresObj = list(FuturesOrders.objects.filter(usr_id=self.user.id, complete=False))
+        open_orders = []
+        for item in orderObj:
+            open_orders.append({
                 "header": "order_responses",
                 "type": item.type,
                 "pair": item.pair,
                 "pairPrice": item.pairPrice,
                 "amount": item.amount,
                 "id": item.id,
-            }
-
-        return order_content
+                "orderType": "limit",
+                "complete": False,
+                "pnl": None,
+                "pnl_percent": None,
+                "is_futures": False,
+            })
+        for fut in futuresObj:
+            try:
+                amount = float(fut.amount.split()[0]) if isinstance(fut.amount, str) else float(fut.amount)
+            except Exception:
+                amount = 0
+            entry = fut.entryPrice
+            leverage = fut.leverage
+            market_price = fut.marketPrice
+            pnl = 0
+            pnl_percent = 0
+            if entry and market_price and leverage and amount:
+                if fut.type.lower() == "long":
+                    pnl = (market_price - entry) * amount * leverage
+                    pnl_percent = ((market_price - entry) / entry) * leverage * 100
+                elif fut.type.lower() == "short":
+                    pnl = (entry - market_price) * amount * leverage
+                    pnl_percent = ((entry - market_price) / entry) * leverage * 100
+            open_orders.append({
+                "header": "order_responses",
+                "type": fut.type,
+                "pair": fut.pair,
+                "pairPrice": fut.entryPrice,
+                "amount": fut.amount,
+                "id": f"futures-{fut.id}",
+                "orderType": "futures",
+                "complete": False,
+                "pnl": round(pnl, 4),
+                "pnl_percent": round(pnl_percent, 2),
+                "is_futures": True,
+                "leverage": fut.leverage,
+                "marketPrice": fut.marketPrice,
+            })
+        return open_orders
 
     @database_sync_to_async
     def cancelOrder(self, ids):
         orders = LimitOrders.objects.filter(
-            usr=self.user,
+            usr_id=self.user.id,
             pk__in=ids,
         )
         for order in orders:
             type_ = 1 if order.type == "buy" else 0
             p_price = order.pairPrice * order.amount_float if order.type == "buy" else order.amount_float
-            Portfolio.objects.filter(usr=self.user, cryptoName=order.pair.split("-")[type_]).update(
+            Portfolio.objects.filter(usr_id=self.user.id, cryptoName=order.pair.split("-")[type_]).update(
                 amount=F("amount") + p_price
             )
         orders.delete()
